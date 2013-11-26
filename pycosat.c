@@ -77,75 +77,69 @@ static int blocksol(PicoSAT *picosat, signed char *mem)
 
 static int add_clause(PicoSAT *picosat, PyObject *clause)
 {
+    PyObject *iterator;         /* each clause is an iterable of literals */
     PyObject *lit;              /* the literals are integers */
-    Py_ssize_t n, i;
     int v;
 
-    if (!PyList_Check(clause)) {
-        PyErr_SetString(PyExc_TypeError, "list expected");
+    iterator = PyObject_GetIter(clause);
+    if (iterator == NULL)
         return -1;
-    }
 
-    n = PyList_Size(clause);
-    for (i = 0; i < n; i++) {
-        lit = PyList_GetItem(clause, i);
-        if (lit == NULL)
-            return -1;
+    while ((lit = PyIter_Next(iterator)) != NULL) {
         if (!IS_INT(lit))  {
+            Py_DECREF(lit);
+            Py_DECREF(iterator);
             PyErr_SetString(PyExc_TypeError, "integer expected");
             return -1;
         }
         v = PyLong_AsLong(lit);
+        Py_DECREF(lit);
         if (v == 0) {
+            Py_DECREF(iterator);
             PyErr_SetString(PyExc_ValueError, "non-zero integer expected");
             return -1;
         }
         picosat_add(picosat, v);
     }
+    Py_DECREF(iterator);
+    if (PyErr_Occurred())
+        return -1;
     picosat_add(picosat, 0);
     return 0;
 }
 
 static int add_clauses(PicoSAT *picosat, PyObject *clauses)
 {
-    PyObject *item;             /* each clause is a list of intergers */
+    PyObject *iterator;       /* clauses can be any iterable */
+    PyObject *item;           /* each clause is an iterable of intergers */
 
-    if (PyIter_Check(clauses)) {
-        while ((item = PyIter_Next(clauses)) != NULL) {
-            if (add_clause(picosat, item) < 0) {
-                Py_DECREF(item);
-                return -1;
-            }
+    if (PyDict_Check(clauses)) {
+        PyErr_SetString(PyExc_TypeError, "did not expect dict");
+        return -1;
+    }
+
+    iterator = PyObject_GetIter(clauses);
+    if (iterator == NULL)
+        return -1;
+
+    while ((item = PyIter_Next(iterator)) != NULL) {
+        if (add_clause(picosat, item) < 0) {
             Py_DECREF(item);
-        }
-        if (PyErr_Occurred())
+            Py_DECREF(iterator);
             return -1;
-
-        return 0;
-    }
-
-    if (PyList_Check(clauses)) {
-        Py_ssize_t n, i;
-
-        n = PyList_Size(clauses);
-        for (i = 0; i < n; i++) {
-            item = PyList_GetItem(clauses, i);
-            if (item == NULL)
-                return -1;
-            if (add_clause(picosat, item) < 0)
-                return -1;
         }
-        return 0;
+        Py_DECREF(item);
     }
-
-    PyErr_SetString(PyExc_TypeError, "iterable or list expected");
-    return -1;
+    Py_DECREF(iterator);
+    if (PyErr_Occurred())
+        return -1;
+    return 0;
 }
 
 static PicoSAT* setup_picosat(PyObject *args, PyObject *kwds)
 {
     PicoSAT *picosat;
-    PyObject *clauses;          /* list of clauses */
+    PyObject *clauses;          /* iterable of clauses */
     int vars = -1, verbose = 0;
     unsigned long long prop_limit = 0;
     static char* kwlist[] = {"clauses",
@@ -328,7 +322,7 @@ static int soliter_traverse(soliterobject *it, visitproc visit, void *arg)
 
 static PyTypeObject SolIter_Type = {
 #ifdef IS_PY3K
-    PyVarObject_HEAD_INIT(&SolIter_Type, 0)
+    PyVarObject_HEAD_INIT(NULL, 0)
 #else
     PyObject_HEAD_INIT(NULL)
     0,                                        /* ob_size */
@@ -393,10 +387,14 @@ PyMODINIT_FUNC initpycosat(void)
     PyObject *m;
 
 #ifdef IS_PY3K
+    if (PyType_Ready(&SolIter_Type) < 0)
+        return NULL;
     m = PyModule_Create(&moduledef);
     if (m == NULL)
         return NULL;
 #else
+    if (PyType_Ready(&SolIter_Type) < 0)
+        return;
     m = Py_InitModule3("pycosat", module_functions, module_doc);
     if (m == NULL)
         return;
