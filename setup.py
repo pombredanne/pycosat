@@ -2,7 +2,7 @@ import sys
 from distutils.core import setup, Extension
 
 
-version = '0.6.0.dev'
+version = '0.6.2'
 
 
 ext_kwds = dict(
@@ -37,6 +37,9 @@ setup(
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.2",
         "Programming Language :: Python :: 3.3",
+        "Programming Language :: Python :: 3.4",
+        "Programming Language :: Python :: 3.5",
+        "Programming Language :: Python :: 3.6",
         "Topic :: Utilities",
     ],
     ext_modules = [Extension(**ext_kwds)],
