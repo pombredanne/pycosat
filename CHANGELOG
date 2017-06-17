@@ -1,5 +1,7 @@
-2017-XX-XX   0.6.2:
+2017-03-16   0.6.2:
 -------------------
+  * update picosat to 965
+  * fixed __version__ attribute on Windows, #21
   * fix some typos
   * add official Python 3.5 and 3.6 support
 
